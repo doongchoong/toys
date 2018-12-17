@@ -1,0 +1,227 @@
+<!doctype html>
+
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8">
+  <title>Mandel</title>
+  <link rel="stylesheet" href="css/styles.css?v=1.0">
+  <script type="text/javascript" src="js/webglbase.js"></script>
+</head>
+
+<body>
+  <div class="viewport">
+    <canvas id="view" width="900" height="600"></canvas>
+  </div>
+  <div>
+    <h3>Mouse Left Click : Zoom In</h3>
+    <h3>Mouse Right Click: Zoom Out</h3>
+    <span id="coord"></span>
+  </div>
+  <script id="shader-vs" type="x-shader/x-vertex">
+
+    attribute vec2 vertPos;
+    attribute vec2 plotPos;
+
+    varying vec2 fragPos;
+
+    void main() {
+        gl_Position = vec4(vertPos, 1.0, 1.0);
+        fragPos = plotPos;
+    }
+  </script>
+  <script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec2 fragPos;
+    
+    
+    vec3 coloring(int bailout){        
+        float pos = 0.0;
+        float t = 0.0;
+        vec4 color1;
+        vec4 color2;
+    
+        vec4 colorStop1 = vec4(  0.0 /255.0 ,   0.0 /255.0, 110.0 /255.0, 0.0);
+        vec4 colorStop2 = vec4(255.0 /255.0 , 255.0 /255.0, 255.0 /255.0, 0.25);
+        vec4 colorStop3 = vec4(255.0 /255.0 , 128.0 /255.0,   0.0 /255.0, 0.5);
+        vec4 colorStop4 = vec4(  0.0 /255.0 ,   0.0 /255.0,   0.0 /255.0, 0.75);
+        vec4 colorStop5 = vec4(  0.0 /255.0 ,   0.0 /255.0, 110.0 /255.0, 1.0);
+    
+        vec3 color;
+    
+        if(bailout >= 1024){
+            return vec3(0.0, 0.0, 0.0);
+        }else{
+    
+            pos = mod(float(bailout), 256.0) / 256.0;
+    
+            if(colorStop1.a <= pos && pos < colorStop2.a){
+                color1 = colorStop1;
+                color2 = colorStop2;
+            }else if(colorStop2.a <= pos && pos < colorStop3.a){
+                color1 = colorStop2;
+                color2 = colorStop3;
+            }else if(colorStop3.a <= pos && pos < colorStop4.a){
+                color1 = colorStop3;
+                color2 = colorStop4;
+            }else{
+                color1 = colorStop4;
+                color2 = colorStop5;
+            }
+            t = (pos - color1.a) / (color2.a - color1.a);
+    
+            color.r = (1.0 - t) * color1.r + t * color2.r;
+            color.g = (1.0 - t) * color1.g + t * color2.g;
+            color.b = (1.0 - t) * color1.b + t * color2.b;
+    
+            return color;
+        }
+    }
+    
+    void main(void){
+        float x = 0.0;
+        float y = 0.0;
+        float nx = 0.0;
+        float ny = 0.0;
+    
+        float cx = fragPos.x;
+        float cy = fragPos.y;
+    
+        float zn = 0.0;
+        float nu = 0.0;
+        float t = 0.0;
+    
+        vec3 color1;
+        vec3 color2;
+    
+        x = cx;
+        y = cy;
+    
+        int cnt = 1024;
+        for(int i=0; i < 1024; i++){
+            if(x*x + y*y > 4.0){
+                cnt = i;
+                break;
+            }
+            nx = x*x - y*y + cx;
+            ny = 2.0*x*y + cy;
+    
+            x = nx;
+            y = ny;
+        }
+    
+        zn = sqrt(x*x + y*y);
+        nu = log(log(zn) / log(2.0)) / log(2.0);
+        t  = 1.0 - nu;
+    
+        color1 = coloring(cnt);
+        color2 = coloring(cnt+1);
+    
+        color1.r = (1.0 - t) * color1.r + t * color2.r;
+        color1.g = (1.0 - t) * color1.g + t * color2.g;
+        color1.b = (1.0 - t) * color1.b + t * color2.b;
+    
+        gl_FragColor = vec4(color1, 1.0);        
+    }
+  </script>
+  <script>
+
+  var canvas = document.getElementById('view');
+  var gl = initWebGL(canvas);
+  gl.viewportWidth = canvas.width;
+  gl.viewportHeight = canvas.height;
+  var program = initShaders(gl);
+
+// attributes location설정
+var vertPos = gl.getAttribLocation(program, 'vertPos');
+gl.enableVertexAttribArray(vertPos);
+
+var plotPos = gl.getAttribLocation(program, 'plotPos');
+gl.enableVertexAttribArray(plotPos);
+
+
+var vertPosBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vertPosBuf);
+var vertices = [
+    -1.0, -1.0,
+    -1.0,  1.0,
+     1.0, -1.0,
+     1.0,  1.0,
+];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+
+
+// {x:-2.0, y:-1.0, w:3.0, h:2.0}
+var plot_vertices = [
+    -2.0, -1.0,
+    -2.0,  1.0,
+     1.0, -1.0,
+     1.0,  1.0
+];
+
+var zoom_history = [plot_vertices];
+function drawScene(){
+    // calc plot from zoom history
+    var zoom = zoom_history[zoom_history.length-1];
+    var coord = document.getElementById('coord');
+    coord.innerHTML = '' + zoom;
+    plot_vertices = zoom;
+
+    // webgl render
+    gl.viewport(0,0,gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertPosBuf);
+    gl.vertexAttribPointer(vertPos, 2, gl.FLOAT, false, 0, 0);
+
+    // plot
+    var plotPosBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, plotPosBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(plot_vertices), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(plotPos, 2, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+drawScene();    
+
+
+canvas.addEventListener('click', function(evt){
+  var rect = canvas.getBoundingClientRect();
+  var x = evt.clientX - rect.left;
+  var y = evt.clientY - rect.top;
+  var zoom = zoom_history[zoom_history.length-1];
+  var tx = 1.0 * x / canvas.width;
+  var ty = 1.0 * y / canvas.height;
+  // scale 900 -> 1
+  //       600 -> 1
+  var tw = Math.abs(zoom[4]-zoom[0]);
+  var th = Math.abs(zoom[3]-zoom[1]);
+  var cx = tw*tx + zoom[0]; 
+  var cy = zoom[3] - th*ty;
+  var mw = tw / 5;
+  var mh = th / 5;
+  var new_vertics = [
+  cx - mw/2, cy - mh/2,
+  cx - mw/2,  cy + mh/2,
+  cx + mw/2, cy - mh/2,
+  cx + mw/2,  cy + mh/2   
+  ];
+  console.log(new_vertics);
+  zoom_history.push(new_vertics);
+  drawScene();
+}, false);
+
+canvas.addEventListener('contextmenu', function(evt){
+  evt.preventDefault();
+  if(zoom_history.length >= 2){
+    zoom_history.pop();
+    drawScene();
+  }
+}, false);
+
+  </script>
+</body>
+
+</html>
