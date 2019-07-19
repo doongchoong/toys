@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <style>
+      .bd-placeholder-img {
+        font-size: 1.125rem;
+        text-anchor: middle;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      @media (min-width: 768px) {
+        .bd-placeholder-img-lg {
+          font-size: 3.5rem;
+        }
+      }
+    </style>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <title>wyacc</title>
+  </head>
+  <body>
+      <div class="container">
+    <h1>LALR</h1>
+    <!-- contents -->
+    <div class="input-group">
+        <div class="input-group-prepend">
+          <span class="input-group-text">Input BNF</span>
+        </div>
+        <textarea id="wyacc_txt" rows=10 class="form-control" aria-label="With textarea">
+E : E + T
+  | T
+  ;
+T : T * F
+  | F
+  ;
+F : ( E )
+  | DIGIT
+  ;
+        </textarea>
+      </div>
+
+    <button id="wyacc_exc" type="button" class="btn btn-primary" >RUN</button>
+    <div id="result">
+
+    </div>
+  </div>
+    <script>
+var btn = document.getElementById('wyacc_exc');
+var txt = document.getElementById('wyacc_txt');
+var result = document.getElementById('result');
+
+function append_content(title, text){
+  var inhtml = '<h2>' + title + '</h2>'
+    + '<pre><code>'+ text + '</code></pre>';
+    result.innerHTML += inhtml;
+}
+
+btn.addEventListener('click', function(){
+  result.innerHTML = '';
+  var toks = gram_tok(txt.value);
+  append_content('BNF tokens', JSON.stringify(toks));
+  
+  var tree = parse_gram(toks);
+  append_content('Parse Bnf', JSON.stringify(tree,null,'\t'));
+  
+  var first = get_first(tree);
+  append_content('Get First Set', JSON.stringify(first));
+
+  var lr = gen_lr0(tree);
+  append_content('Gen LR0 table', 
+    print_lr0_table(lr['lr0_table'], lr['lr0_table_cols'])
+    + JSON.stringify(lr['lr0_states'], null, '\t')
+  );
+
+
+},false);
+  
+    </script>
+    <script type="text/javascript" src="./js/gram.js"></script>
+    <script type="text/javascript" src="./js/lr.js"></script>
+    <!-- contents -->
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+  </body>
+</html>
