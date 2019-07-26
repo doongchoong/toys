@@ -120,9 +120,10 @@ function make_table_elem(table, header, ter_size){
 btn.addEventListener('click', function(){
   history_log.innerHTML = '';
   var toks = gram_tok(txt.value);
-  append_content('BNF tokens', JSON.stringify(toks));
+  append_content('BNF tokens', JSON.stringify(toks['toks']));
+  append_content('Precedence', JSON.stringify(toks['prec'], null, '\t'));
  
-  var tree = parse_gram(toks);
+  var tree = parse_gram(toks['toks']);
   append_content('Parse Bnf', JSON.stringify(tree,null,'\t'));
  
   var first = get_first(tree);
@@ -138,7 +139,7 @@ btn.addEventListener('click', function(){
   var la = gen_la(tree, lr, first);
   append_content('Gen Lookahead info', JSON.stringify(la, null, '\t'));
 
-  var lalr = conflict_check(tree, lr, la);
+  var lalr = conflict_check(tree, lr, la, toks['prec']);
   append_content('Conflict check', 
     JSON.stringify(lalr['conflict'], null, '\t')+ '\n' + 
     print_table(tree, lalr['table'], lr['lr0_table_cols'])

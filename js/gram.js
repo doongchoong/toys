@@ -2,6 +2,36 @@
 console.log('load_gram.js');
 
 function gram_tok(text){
+	var lines = text.split('\n');
+	var preproc_list = [];
+	var prec_set = {};
+	var prec_score = 0;
+	for(var line of lines){
+		var typ = null;
+		if(line.indexOf('%left') != -1){
+			typ = 'left';
+		}
+		if(line.indexOf('%right') != -1){
+			typ = 'right';
+		}
+		if(line.indexOf('%nonassoc') != -1){
+			typ = 'nonassoc';
+		}
+		if(typ == null){
+			preproc_list.push(line);
+		}else{
+			var symbols = line.split(/\s+/);
+			for(var sym of symbols){
+				if (sym != '%left' && sym != '%right' && sym != '%nonassoc') {
+					if (sym.length > 0) {
+						prec_score++;
+						prec_set[sym] = { 'score': prec_score, 'type': typ };
+					}
+				}
+			}
+		}
+	}
+	text = preproc_list.join(' ');
 	// 토큰은 기본적으로 공백으로 구분
 	// 주석은 가장 바깥쪽 짝으로 맞춤 
 	var toks = text.split(/\s+|\/\*(?:\s|.)*\*\//);
@@ -36,7 +66,7 @@ function gram_tok(text){
 		}
 	}
 	//console.log(ret);
-	return ret;
+	return {'toks': ret, 'prec': prec_set};
 }
 
 
@@ -53,7 +83,8 @@ function parse_gram(toks){
 	var PRD = 1;
 	var END = 2;
 	var ORR = 3;
-	var STR = 4;
+	var PRC = 4;
+	var STR = 5;
     // 심볼종류
 	function get_sym(tok){
 		switch(tok){
@@ -61,6 +92,7 @@ function parse_gram(toks){
 			case ':': return PRD;
 			case ';': return END;
 			case '|': return ORR;
+			case '%prec': return PRC;
 			default: return STR;
 		}
 	}
@@ -105,16 +137,21 @@ function parse_gram(toks){
 		body_(symbol);
 	}
 	function sub(symbol){
-	    var rule = [];
+		var rule = [];
+		var op = null;
 		while(true){
 			if(get_sym(look) == STR){
 			    rule.push(look);
 				match(STR);
+				if(get_sym(look) == PRC){
+					op = prec();
+					break;
+				}
 				continue;
 			}
 			break;
 		}
-		grammar.push({'head': symbol, 'body': rule});
+		grammar.push({'head': symbol, 'body': rule, 'op': op});
 	}
 	function body_(symbol){
 		while(true){
@@ -125,6 +162,13 @@ function parse_gram(toks){
 			}
 			break;
 		}
+	}
+	// %prec 으로 새로운 operation 으로 지정
+	function prec(){
+		match(PRC);
+		var symbol = look;
+		match(STR);
+		return symbol;
 	}
     // start parsing
 	try{
@@ -147,17 +191,23 @@ function parse_gram(toks){
 	// 터미널
 	cnt=0;
 	for(var i=0; i < grammar.length; i++){
+		var last_ter = null;
 	    for(var j=0; j < grammar[i]['body'].length; j++){
 	        if(grammar[i]['body'][j] in non){
 	            // pass
 	        }else{ 
 				if(grammar[i]['body'][j] in ter){
-
+					// pass
 				}else{
 					ter[grammar[i]['body'][j]] = cnt++;
 				}
+				last_ter = grammar[i]['body'][j];
 	        }
-	    }
+		}
+		// 해당룰의 operation은 마지막 터미널로 한다.
+		if(grammar[i]['op'] == null){
+			grammar[i]['op'] = last_ter;
+		}
 	}
 	
 	
@@ -167,3 +217,6 @@ function parse_gram(toks){
 	    'ter' : ter
 	};
 }
+
+
+

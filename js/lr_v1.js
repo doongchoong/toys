@@ -518,7 +518,7 @@ function gen_la(gram, lr0_info, first_set){
 
 
 
-function conflict_check(gram, lr0_info, la_set){
+function conflict_check(gram, lr0_info, la_set, prec_set){
     var grammar = [{'head':'^START', 'body':[gram['gram'][0]['head']]}].concat(gram['gram']);
     var non = gram['non'];
     var ter = gram['ter'];
@@ -557,17 +557,51 @@ function conflict_check(gram, lr0_info, la_set){
                     // conflict!!
                     if(r_table[lr][ter[sym]+1] > ridx){
                         // reduce-reduce conflict
+                        // 먼저 나온생성규칙 선택
+                        var ch_rule = Math.min(r_table[lr][ter[sym]+1]-ridx, rule);
+                        r_table[lr][ter[sym]+1] = ch_rule + ridx;
                         conflict_list.push({
                             'type': 'reduce-reduce',
-                            'rule1': grammar[r_table[lr][ter[sym]+1]-ridx],
-                            'rule2': grammar[rule]
+                            'rule1': grammar[rule1],
+                            'rule2': grammar[rule2],
+                            'choose_rule': ch_rule
                         });
                     }else{
                         // shift-reduce conflict
+                        var sym_prec = 0;
+                        var rule_prec = 0;
+                        var choose = 'shift';
+                        if(sym in prec_set){
+                            sym_prec = prec_set[sym]['score'];
+                        }
+                        if(grammar[rule]['op'] in prec_set){
+                            rule_prec = prec_set[grammar[rule]['op']]['score'];
+                        }
+                        if(sym_prec < rule_prec){
+                            // 규칙이 더 우선순위 있는경우 reduce
+                            r_table[lr][ter[sym]+1] = ridx + rule;
+                            choose = 'reduce';
+                        }else if(sym_prec == rule_prec){
+                            //같은경우 assoc 방식 체크
+                            if (sym in prec_set) {
+                                if (prec_set[sym]['type'] == 'left') {
+                                    //left면 감축을 선택
+                                    r_table[lr][ter[sym] + 1] = ridx + rule;
+                                    choose = 'left-reduce';
+                                } else if (prec_set[sym]['type'] == 'nonassoc') {
+                                    // nonassoc 이면 syntax error 선택
+                                    r_table[lr][ter[sym] + 1] = 0;
+                                    choose = 'nonassoc';
+                                } else {
+                                    choose = 'right';
+                                }
+                            }
+                        }
                         conflict_list.push({
                             'type': 'shift-reduce',
                             'symbol': sym,
-                            'rule': grammar[rule]
+                            'rule': grammar[rule],
+                            'choose': choose
                         });
                     }
                 }
