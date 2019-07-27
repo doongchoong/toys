@@ -30,6 +30,11 @@
     <h1>LALR Generator (by doongchoong)</h1>
     <!-- contents -->
     <div class="input-group">
+      <button id="ex1_btn" type="button" class="btn btn-info" >Example1</button>
+      <button id="ex2_btn" type="button" class="btn btn-info" >Example2</button>
+      <button id="ex3_btn" type="button" class="btn btn-info" >Example3</button>
+    </div>
+    <div class="input-group">
         <div class="input-group-prepend">
           <span class="input-group-text">Input BNF</span>
         </div>
@@ -148,6 +153,39 @@ btn.addEventListener('click', function(){
 
   make_table_elem(lalr['table'], lr['lr0_table_cols'], Object.keys(tree['ter']).length);
 },false);
+
+  var ex1_btn = document.getElementById('ex1_btn');
+  var ex2_btn = document.getElementById('ex2_btn');
+  var ex3_btn = document.getElementById('ex3_btn');
+
+  ex1_btn.addEventListener('click', function(){
+    txt.innerHTML = 'E : E + T\n  | T\n  ;\nT : T * F\n  | F\n  ;\nF : ( E )\n  | DIGIT\n  ;';
+  }, false);
+  ex2_btn.addEventListener('click', function(){
+    txt.innerHTML = 
+      '%left < \n' + 
+      '%left - * \n' + 
+      'expr:     expr - expr\n' +
+      '  | expr * expr\n' +
+      '  | expr < expr\n' +
+      '  | ( expr )\n' +
+      '  | digit\n' +
+      '  ;'
+  }, false);
+  ex3_btn.addEventListener('click', function(){
+    txt.innerHTML = 
+'%nonassoc IF_THEN' + '\n' +
+'%nonassoc ELSE' + '\n'  +
+'stmt:     expr' + '\n'  +
+'        | if_stmt'+ '\n'  +
+'        ;' + '\n'  +
+'if_stmt: ' + '\n'  +
+'          IF expr THEN stmt  %prec IF_THEN' + '\n'  +
+'        | IF expr THEN stmt ELSE stmt ' + '\n'  +
+'        ;' + '\n'  +
+'expr:     VAR' + '\n'  +
+'        ;' + '\n' ;
+  }, false);
   
     </script>
     <script type="text/javascript" src="./js/gram.js"></script>
