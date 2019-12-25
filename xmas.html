@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+<title>X-Mas tree</title>
+<link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro" rel="stylesheet" type="text/css">
+<style>
+	body {
+  background: #0f0f23; /*337 x 5*/
+  color: #cccccc;
+  font-family: "Source Sans Pro", monospace;
+  font-size: 20pt;
+  min-width: 60em;
+}
+.green{
+	color: #00dc18;
+	text-shadow: 0 0 2px #00dc18, 0 0 5px #00dc18;
+}
+.red{
+	color: #ff1818;
+	text-shadow: 0 0 2px #ff1818, 0 0 5px #ff1818;
+}
+.yellow{
+	color: #fff900;
+	text-shadow: 0 0 2px #fff900, 0 0 5px #fff900;
+}
+.blue{
+	color: #2a7fff;
+	text-shadow: 0 0 2px #2a7fff, 0 0 5px #2a7fff;
+}
+pre {
+    display: block;
+    margin: 1em 0px;
+}
+	</style>
+</head>
+<body>
+	<pre id="content">
+	</pre>
+	<script>
+
+setInterval(function(){
+	var content = document.getElementById('content');
+
+	function indent(margin){
+		var ret = [];
+		for(var i=0; i < margin; i++){
+			ret.push(' ');
+		}
+		return ret.join('');
+	}
+
+	var colors = ['green', 'red', 'blue','green', 'yellow','green', 'green', 'red', 'blue', 'yellow'];
+	var len = 1;
+	var inhtml = '';
+	for(var margin = 15; margin > 0; margin--, len+=2){
+		inhtml += indent(margin);
+		for(var i=0; i < len; i++){
+			if(margin == 15){
+				inhtml += '<span class="yellow">*</span>';
+			}else{
+				if(i == 0){
+					inhtml += '<span class="green">}</span>';
+				}else if(i == len-1){
+					inhtml += '<span class="green">{</span>';
+				}else{
+					var pick_color = colors[Math.floor(Math.random() * 10)];
+					if (pick_color == 'red'){
+						inhtml += '<span class="red">@</span>';
+					}else if(pick_color=='blue'){
+						inhtml += '<span class="blue">$</span>';
+					}else if(pick_color=='yellow'){
+						inhtml += '<span class="yellow">*</span>';
+					}else{
+						if(Math.random() > 0.5){
+							inhtml += '<span class="green">{</span>';
+						}else{
+							inhtml += '<span class="green">}</span>';
+						}
+					}
+				}
+			}
+		}
+		inhtml += '\n';
+	}
+	inhtml += '\n<span class="green">Merry Christmas  Github Gallery\n           - GoJa - </span> ';
+
+	content.innerHTML = inhtml;
+}, 1000);
+
+	</script>
+</body>
+</html>
