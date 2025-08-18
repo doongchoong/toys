@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hexagonal Cellular Automata</title>
+<style>
+body { margin:0; background:#111; color:#ddd; font-family:sans-serif; }
+canvas { display:block; margin:0 auto; background:#000; }
+#controls { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; padding:10px; }
+button { width: 120px; font-size: 14px; padding:6px 10px; border-radius:6px; border:none; background:#222; color:#ddd; }
+button:hover { background:#333; cursor:pointer; flex: 0 0 auto;}
+.info-text {margin: 0px; padding: 6px 10px; background: rgba(2,6,23,.7); border: 1px solid rgba(125,211,252,.25); border-radius: 999px;font-size: 14px;display: inline-block; width: 200px; white-space: nowrap;}
+
+</style>
+</head>
+<body>
+<div id="controls">
+  <button id="randomize">🎲 Randomize</button>
+  <button id="pause">⏸ Pause</button>
+  <button id="clear">🧹 Clear</button>
+  <span class="info-text" id="infos">크기: 100x80, 세대: 100</span>
+</div>
+<canvas id="ca" width="600" height="400"></canvas>
+
+<script>
+const canvas=document.getElementById('ca');
+const ctx=canvas.getContext('2d');
+
+
+class HexCellularAutomata {
+    static NEI_EVEN = [[+1,0],[0,+1],[-1,+1],[-1,0],[-1,-1],[0,-1]];
+    static NEI_ODD = [[+1,0],[+1,+1],[0,+1],[-1,0],[0,-1],[+1,-1]];
+    static DENSITY = 0.21;
+    static SQRT3 = Math.sqrt(3);
+    
+    constructor(canvas, hex_size){
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.cols = Math.floor(canvas.width/(Math.sqrt(3)*hex_size))+3;
+        this.rows = Math.floor(canvas.height/(1.5*hex_size))+3;
+        this.hex_size = hex_size;
+        this.grid = this.createGrid(this.cols, this.rows);
+        this.nextGrid = this.createGrid(this.cols, this.rows);
+        this.speed = 1000.0 / 12;
+        this.paused = false;
+        this.paused_label = '⏸️ Pause';
+        this.elem = null;
+        this.cnt = 0;
+        
+        this.randomizeGrid(); 
+        this.rule = this.parseRule('2456/23456/4');
+    }
+    
+    createGrid(c,r){ return Array.from({length:r},()=>new Uint8Array(c).fill(0)); }
+    
+    randomizeGrid(){
+        for(let y=0; y < this.grid.length; y++){
+            for(let x=0; x < this.grid[0].length; x++){
+                this.grid[y][x] = Math.random() < HexCellularAutomata.DENSITY ? 1 : 0;
+            }
+        }
+    }
+    
+    clearGrid(){
+        for(let y=0; y < this.grid.length; y++){
+            this.grid[y].fill(0);
+        }
+        this.cnt = 0;
+        this.updateInfoElem();
+    }
+    
+    togglePaused(){
+        if(this.paused){
+            this.paused = false;
+            this.paused_label = '⏸️ Pause';
+        }else{
+            this.paused = true;
+            this.paused_label = '▶️ Resume';
+        }
+    }
+    
+    countNeighbors(x, y){
+        const nei = (y&1)? HexCellularAutomata.NEI_ODD: HexCellularAutomata.NEI_EVEN ;
+        let cnt =0;
+        for(let i=0; i < 6; i++){
+            let dx = nei[i][0];
+            let dy = nei[i][1];
+            
+            let nx = (x + dx + this.cols) % this.cols;
+            let ny = (y + dy + this.rows) % this.rows;
+            
+            if(this.grid[ny][nx] == 1)
+                cnt++;
+        }
+        return cnt;
+    }
+    
+    parseRule(text){
+      // 공백 제거
+      const t = text.trim();
+      const parts = t.split('/');
+      if (parts.length !== 3) throw new Error('형식은 S/B/G 입니다. 예: 2345/23456/4');
+      const [sPart, bPart, gPart] = parts;
+      const s = new Set([...sPart].map(ch => parseInt(ch, 10)).filter(n => !isNaN(n)));
+      const b = new Set([...bPart].map(ch => parseInt(ch, 10)).filter(n => !isNaN(n)));
+      const g = parseInt(gPart, 10);
+      if (!Number.isInteger(g) || g < 2 || g > 50) throw new Error('G(상태 수)는 2~50 사이의 정수여야 합니다.');
+      return { survive: s, birth:b, state:g };
+    }
+    
+    step(){
+        for(let y=0; y < this.rows; y++){
+            for(let x=0; x < this.cols; x++){
+                const v = this.grid[y][x];
+                const n = this.countNeighbors(x, y);
+                
+                if(v == 1){
+                    this.nextGrid[y][x] = this.rule.survive.has(n)? 1 : 2;
+                }else if(v > 1){
+                    this.nextGrid[y][x] = (v + 1 >= this.rule.state) ? 0 : v + 1;
+                }else{
+                    this.nextGrid[y][x] = this.rule.birth.has(n)? 1: 0;
+                }
+            }
+        }// end for
+        [this.grid, this.nextGrid] = [this.nextGrid, this.grid];
+    }
+    
+    // Rendering
+    hexXY(x, y){  //  grid 좌표계를 실질 hex의 위치 좌표로 변경
+        return [
+            // hex좌표계 x
+            x * HexCellularAutomata.SQRT3 * this.hex_size 
+            + (y&1? HexCellularAutomata.SQRT3 * this.hex_size / 2: 0)
+            + this.hex_size,
+            
+            // hex좌표계 y
+            y * 1.5 * this.hex_size + this.hex_size
+        ];
+    }
+    
+    drawHex(cx, cy, r){
+        this.ctx.beginPath();
+        for(let i=0; i < 6; i++){
+            const a = Math.PI / 180 * (60 * i - 30);
+            const px = cx + r * Math.cos(a);
+            const py = cy + r * Math.sin(a);
+            
+            if(i == 0){
+                this.ctx.moveTo(px, py);
+            }else{
+                this.ctx.lineTo(px, py);
+            }
+        }
+        this.ctx.closePath();
+    }
+    
+    stateColor(s){
+        if(s == 0) return null;
+        const t = (s-1)/ (this.rule.state - 1);
+        return `hsl(30, 100%, ${Math.round(80-50*t)}%)`;
+    }
+    
+    render(){
+        this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+        for(let y=0; y < this.rows; y++){
+            for(let x=0; x < this.cols; x++){
+                const s = this.grid[y][x];
+                if(s == 0) 
+                    continue;
+                const fill = this.stateColor(s);
+                const [cx, cy] = this.hexXY(x, y);
+                this.drawHex(cx, cy, this.hex_size);
+                this.ctx.fillStyle = fill;
+                this.ctx.fill();
+            }
+        }
+    }
+    
+    setInfoElem(elem){
+        this.elem = elem;
+    }
+    updateInfoElem(){
+        if(this.elem != null){
+            this.elem.textContent = `크기: ${this.cols}x${this.rows}, 세대: ${this.cnt}`;
+        }
+    }
+    
+    start(){
+        setInterval(() => {
+            if(this.paused){
+                // pass   
+            }else{
+                this.step();
+                this.render();
+                this.updateInfoElem();
+                this.cnt++;
+            }
+        }, this.speed);
+    }
+}
+
+let hexca = new HexCellularAutomata(canvas, 4);
+
+
+document.getElementById('pause').onclick=()=>{
+    hexca.togglePaused();
+    document.getElementById('pause').textContent = hexca.paused_label;
+};
+
+document.getElementById('randomize').onclick=()=>{ 
+    hexca.randomizeGrid(); hexca.render(); 
+};
+document.getElementById('clear').onclick=()=>{ 
+    hexca.clearGrid(); 
+    hexca.render(); 
+};
+
+hexca.setInfoElem(document.getElementById("infos"));
+
+//hexca.render();
+hexca.start();
+
+
+</script>
+</body>
+</html>
