@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Drop Paint</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 20px;
+    text-align: center;
+  }
+
+  #colorBox {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #333;
+    vertical-align: middle;
+    margin-left: 5px;
+  }
+
+  canvas {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+
+#info {
+  display: flex;
+  justify-content: center; /* 내부 버튼+정보 중앙 정렬 */
+  align-items: center;
+  gap: 20px;
+  
+  max-width: 600px;        /* 캔버스와 동일한 너비 */
+  margin: 0 auto 20px auto; /* 화면 중앙 + 아래 여유 공간 */
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+#buttons {
+  width: 250px; /* 버튼 영역 고정폭 */
+  display: flex;
+  gap: 10px;
+}
+
+#buttons button {
+  width: 120px;
+  height: 40px;
+  background-color: #6BCB77;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#buttons button:hover {
+  background-color: #9D4EDD; /* 호버 시 색상 변경 */
+}
+
+#status {
+  width: 300px; /* 정보 영역 고정폭 */
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#colorText, #count {
+  font-family: monospace;
+  width: 60px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<div id="info">
+  <div id="buttons">
+    <button id="resetBtn">↩︎ Reset</button>
+    <button id="stopBtn">⏸ Stop</button>
+  </div>
+  <div id="status">
+    Drop 색상: <span id="colorText"></span>
+    <span id="colorBox"></span> |
+    개수: <span id="count">0</span>
+  </div>
+</div>
+
+<canvas id="ca" width="600" height="400"></canvas>
+
+<script>
+const canvas=document.getElementById('ca');
+const ctx=canvas.getContext('2d');
+
+// 컨트롤들
+const colorText = document.getElementById("colorText");
+const colorBox = document.getElementById("colorBox");
+const countSpan = document.getElementById("count");
+const resetBtn = document.getElementById("resetBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+const palette = [
+      "#FF6B6B", // 레드톤
+      "#FFD93D", // 옐로우톤
+      "#6BCB77", // 그린톤
+      "#4D96FF", // 블루톤
+      "#9D4EDD"  // 퍼플톤
+];
+
+function random_int(max){
+  return Math.floor(Math.random() * max);
+}
+
+function randomColor() {
+  return palette[random_int(palette.length)];
+}
+
+const circleSegments = 100;
+
+class Paint {
+  constructor(x, y, r, color){
+    this.center = {x: x, y: y};
+    this.r = r; 
+
+    // 원을 구성하는 점들을 생성함.
+    this.vertices = [];
+    for(let i =0; i < circleSegments; i++){
+      let angle = i * (Math.PI * 2 / circleSegments );
+      let v = {
+        x: Math.cos(angle) * this.r + this.center.x,
+        y: Math.sin(angle) * this.r + this.center.y,
+      };
+      this.vertices.push(v);
+    }
+    this.color = color;
+  }
+
+  // 무늬 만들기
+  marble(newone){
+    // 공식: C + (P - C) * sqrt(1 + r^2 / ||(P - C)||^2 )
+    for(let v of this.vertices){
+      let c = newone.center;
+      let r = newone.r;
+      let p = { // 벡터 빼기
+        x: v.x - c.x,
+        y: v.y - c.y,
+      };
+      let mag_square = p.x * p.x + p.y * p.y;
+      let sqrt = Math.sqrt(1 + r*r / mag_square);
+      p.x = p.x * sqrt + c.x;
+      p.y = p.y * sqrt + c.y;
+
+      // assign p in v
+      v.x = p.x;
+      v.y = p.y;
+    }
+  }
+
+  // context에 draw 
+  draw(ctx){
+    ctx.beginPath();
+    for(let [i, p] of this.vertices.entries()){
+      if(i == 0){
+        ctx.moveTo(p.x, p.y);
+      }else{
+        ctx.lineTo(p.x, p.y);
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = this.color;
+    ctx.fill();
+  }
+}
+
+class Drop {
+  constructor(canvas, max = 200){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.drops = [];
+    this.max = max;
+  }
+
+  drop_paint(color){
+    // 초과하면 아무것도 하지 않음
+    if( this.drops.length >= this.max ){
+      return ;
+    }
+
+    let x = random_int(this.canvas.width);
+    let y = random_int(this.canvas.height);
+    let r = random_int(40) + 10;
+
+    let newone = new Paint(x, y, r, color);
+
+    for(let oldone of this.drops){
+      oldone.marble(newone);
+    }
+    this.drops.push(newone);
+  }
+
+  draw(){
+    // 초과하면 아무것도 하지 않음
+    if( this.drops.length >= this.max ){
+      return ;
+    }
+    // 모든 drop을 그림
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    for(let drop of this.drops){
+      drop.draw(this.ctx);
+    }    
+  }
+
+  clear(){
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.drops = [];
+  }
+
+  is_max(){
+    return (this.max <= this.drops.length);
+  }
+}
+
+
+let drop = new Drop(canvas);
+
+let count = 0;
+let lastTime = 0;
+let pause = false;
+
+function loop(timestamp) {
+  if (timestamp - lastTime >= 200) { // 1000ms = 1초
+    if(pause){
+      //pass
+    }else{
+      let color = randomColor();
+      drop.drop_paint(color);
+      drop.draw();
+      count = drop.drops.length;
+
+      // update UI
+      if( drop.is_max() == false) {
+        countSpan.textContent = count;
+        colorText.textContent = color;
+        colorBox.style.backgroundColor = color;  
+      }else{
+        pause = true;
+        stopBtn.textContent = '▶️ Play';
+      }
+    }
+    // update time
+    lastTime = timestamp;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function resetCanvas() {
+  drop.clear();
+}
+
+function stopDrawing() {
+  if(pause){
+    pause = false;
+    stopBtn.textContent = '⏸ Stop';
+  }else{
+    pause = true;
+    stopBtn.textContent = '▶ Play';
+  }
+
+}
+
+resetBtn.addEventListener("click", resetCanvas);
+stopBtn.addEventListener("click", stopDrawing);
+
+// start
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
