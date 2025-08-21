@@ -5,11 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Drop Paint</title>
 <style>
-  body {
-    font-family: sans-serif;
-    margin: 20px;
-    text-align: center;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+  margin: 0 auto;   /* 좌우 auto → 가운데 정렬 */
+  border: 1px solid #ccc;
+  border-radius: 8px;
+
+}
 
   #colorBox {
     display: inline-block;
@@ -20,60 +28,88 @@
     margin-left: 5px;
   }
 
-  canvas {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    display: block;
-    margin: 0 auto;
-  }
-
 #info {
   display: flex;
-  justify-content: center; /* 내부 버튼+정보 중앙 정렬 */
+  flex-wrap: wrap;        /* 줄바꿈 허용 */
+  justify-content: center;
   align-items: center;
-  gap: 20px;
-  
-  max-width: 600px;        /* 캔버스와 동일한 너비 */
-  margin: 0 auto 20px auto; /* 화면 중앙 + 아래 여유 공간 */
+  gap: 10px;
+
+  max-width: 80%;        /* 모바일에서 꽉 차도록 */
+  min-width: 600px;
+  margin: 0 auto 20px auto;
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 8px;
   background-color: #f9f9f9;
+  box-sizing: border-box;
 }
 
+/* 버튼 영역 */
 #buttons {
-  width: 250px; /* 버튼 영역 고정폭 */
+  flex: 1 1 200px;        /* 최소 200px, 공간 따라 늘어나기 */
   display: flex;
   gap: 10px;
+  justify-content: center;
 }
 
 #buttons button {
-  width: 120px;
+  flex: 1;                /* 버튼 2개가 자동으로 반반 차지 */
+  min-width: 100px;       /* 너무 작아지지 않도록 */
   height: 40px;
   background-color: #6BCB77;
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 10px;
   font-size: 14px;
   border-radius: 6px;
   cursor: pointer;
 }
 
 #buttons button:hover {
-  background-color: #9D4EDD; /* 호버 시 색상 변경 */
+  background-color: #9D4EDD;
 }
 
+/* 상태 표시 영역 */
 #status {
-  width: 300px; /* 정보 영역 고정폭 */
+  flex: 1 1 200px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+  min-width: 150px;
 }
 
 #colorText, #count {
   font-family: monospace;
-  width: 60px;
+  min-width: 50px;
   text-align: center;
+}
+
+/* 모바일 대응 */
+@media (max-width: 600px) {
+  #info {
+      max-width: 100%;        /* 모바일에서 꽉 차도록 */
+      flex: 1 1 auto;   /* 기본 크기 auto, 세로 간격 벌어지지 않음 */
+    flex-direction: column;   /* 버튼 영역 + 상태 영역 세로 배치 */
+    gap: 15px;
+    padding: 6px;    /* 박스 여백도 줄이기 */
+  }
+
+  #buttons {
+      flex: 1 1 auto;   /* 기본 크기 auto, 세로 간격 벌어지지 않음 */
+    width: 100%;              /* 모바일에서는 가로 꽉 차게 */
+  }
+
+  #buttons button {
+    flex: 1;                  /* 버튼이 자동으로 꽉 차게 */
+  }
+
+  #status {
+      flex: 1 1 auto;   /* 기본 크기 auto, 세로 간격 벌어지지 않음 */
+    width: 100%;
+    justify-content: space-around;
+  }
 }
 </style>
 </head>
