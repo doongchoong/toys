@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GPX Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.min.css">
+  <script src="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    #map { height: 420px; }
+    .stat-card { min-width: 160px; }
+    .export-target { background: white; }
+	
+	canvas{ background: black; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-6xl mx-auto p-4 sm:p-6">
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+      <div class="flex items-center gap-3">
+        <div id="logoWrap" class="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 grid place-items-center shadow-lg">
+          <svg id="defaultLogo" viewBox="0 0 24 24" class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold">GPX Viewer</h1>
+          <p class="text-sm text-slate-500">거리 · 취득고도 · 시간 · 이동 미니맵 · 인증투명사진</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 bg-white shadow-sm cursor-pointer hover:bg-slate-50">
+          <input id="bottomtext" type="text" value="@dc-climbing-gall"  />
+        </label>
+        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 bg-white shadow-sm cursor-pointer hover:bg-slate-50">
+          <input id="gpxInput" type="file" accept=".gpx" class="hidden" />
+          <span class="text-sm font-medium">GPX 파일 불러오기</span>
+        </label>
+        <button id="exportBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white shadow hover:bg-slate-800 disabled:opacity-50" >이미지생성</button>
+      </div>
+    </header>
+    <section id="exportArea" class="export-target rounded-3xl p-4 sm:p-6 shadow-lg ring-1 ring-slate-900/10 bg-white">
+      <div class="grid lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2">
+          <div id="map" class="w-full rounded-3xl overflow-hidden shadow"></div>
+          <div class="mt-3 text-xs text-slate-500">지도 데이터 © OpenStreetMap 기여자, 타일 © OpenStreetMap</div>
+        </div>
+        <div class="flex flex-col gap-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="stat-card rounded-2xl p-4 bg-rose-50 border border-rose-100">
+              <p class="text-xs text-rose-600">총 거리</p>
+              <p id="totalDistance" class="text-2xl font-semibold">-</p>
+            </div>
+            <div class="stat-card rounded-2xl p-4 bg-orange-50 border border-orange-100">
+              <p class="text-xs text-orange-600">취득고도</p>
+              <p id="elevGain" class="text-2xl font-semibold">-</p>
+            </div>
+            <div class="stat-card rounded-2xl p-4 bg-emerald-50 border border-emerald-100">
+              <p class="text-xs text-emerald-600">경과 시간</p>
+              <p id="elapsedTime" class="text-2xl font-semibold">-</p>
+            </div>
+            <div class="stat-card rounded-2xl p-4 bg-sky-50 border border-sky-100">
+              <p class="text-xs text-sky-600">이동 시간(추정)</p>
+              <p id="movingTime" class="text-2xl font-semibold">-</p>
+            </div>
+          </div>
+          <div class="rounded-2xl p-4 bg-slate-50 border border-slate-200">
+            <p class="text-xs text-slate-500">파일</p>
+            <p id="fileName" class="text-sm font-medium truncate">-</p>
+            <p class="text-xs text-slate-400" id="dateRange">-</p>
+          </div>
+          <div class="text-xs text-slate-500">
+            * 이동 시간은 저속(기본 1 m/s 미만) 구간을 휴식으로 간주해 추정합니다.
+          </div>
+        </div>
+      </div>
+    </section>
+	<canvas id="summaryCanvas" width="600" height="800"></canvas>
+    <footer class="mt-6 text-xs text-slate-400">
+      OSM 타일은 공개 리소스입니다. 대량 사용 전에는 자체 타일 서버/키 사용을 고려하세요.
+    </footer>
+  </div>
+  <script>
+    const toFixed = (n, d=2) => Number.isFinite(n) ? n.toFixed(d) : '-';
+    const fmtDistance = (m) => m >= 1000 ? `${toFixed(m/1000,2)} km` : `${Math.round(m)} m`;
+    const fmtElev = (m) => Number.isFinite(m) ? `${Math.round(m)} m` : '-';
+    const fmtTime = (sec) => {
+      if (!Number.isFinite(sec)) return '-';
+      const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60);
+      //return [h,m,s].map(v=>String(v).padStart(2,'0')).join(':');
+	  return h + 'h ' + m + 'm';
+    };
+    function haversine(lat1, lon1, lat2, lon2){
+      const R=6371000,toRad=d=>d*Math.PI/180,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
+      const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    }
+    function parseGPX(text){
+      const doc=new DOMParser().parseFromString(text,'application/xml');
+      return Array.from(doc.getElementsByTagName('trkpt')).map(pt=>{
+        const lat=parseFloat(pt.getAttribute('lat')), lon=parseFloat(pt.getAttribute('lon'));
+        const eleEl=pt.getElementsByTagName('ele')[0], timeEl=pt.getElementsByTagName('time')[0];
+        const ele=eleEl?parseFloat(eleEl.textContent):NaN, time=timeEl?new Date(timeEl.textContent):null;
+        return {lat,lon,ele,time};
+      }).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+    }
+    function computeMetrics(points){
+      const elevThreshold=1, stopSpeed=1, stopGrace=5;
+      let totalDist=0,gain=0,movingTime=0,last=null,belowSince=null;
+      for(const p of points){
+        if(!last){last=p;continue;}
+        const d=haversine(last.lat,last.lon,p.lat,p.lon);
+        const dt=(p.time&&last.time)?(p.time-last.time)/1000:NaN;
+        if(Number.isFinite(d)) totalDist+=d;
+        if(Number.isFinite(p.ele)&&Number.isFinite(last.ele)){const up=p.ele-last.ele;if(up>elevThreshold)gain+=up;}
+        if(Number.isFinite(dt)&&dt>0&&Number.isFinite(d)){
+          const speed=d/dt;
+          if(speed>=stopSpeed){movingTime+=dt;belowSince=null;}
+          else{if(belowSince===null)belowSince=last.time?last.time.getTime():null;
+            const belowDur=belowSince&&p.time?(p.time.getTime()-belowSince)/1000:0;
+            if(belowDur<stopGrace)movingTime+=dt;}
+        }
+        last=p;
+      }
+      const start=points[0]?.time??null,end=points.at(-1)?.time??null,elapsed=(start&&end)?(end-start)/1000:NaN;
+      return {totalDist,gain,elapsed,movingTime,start,end};
+    }
+
+    const map = L.map('map');
+	// Set initial center and zoom first
+    map.setView([36.5,127.8],7);
+	
+    const base = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap 기여자',crossOrigin:true}).addTo(map);
+    const miniBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{crossOrigin:true});
+    new L.Control.MiniMap(miniBase,{toggleDisplay:true,minimized:false,aimingRectOptions:{weight:2}}).addTo(map);
+    let trackLayer=null;
+    
+
+    const els={gpxInput:document.getElementById('gpxInput'),defaultLogo:document.getElementById('defaultLogo'),exportBtn:document.getElementById('exportBtn'),exportArea:document.getElementById('exportArea'),totalDistance:document.getElementById('totalDistance'),elevGain:document.getElementById('elevGain'),elapsedTime:document.getElementById('elapsedTime'),movingTime:document.getElementById('movingTime'),fileName:document.getElementById('fileName'),dateRange:document.getElementById('dateRange')};
+
+    els.gpxInput.addEventListener('change',async e=>{
+      const file=e.target.files?.[0];if(!file)return;
+      els.fileName.textContent=file.name;
+      const pts=parseGPX(await file.text());
+      if(!pts.length){alert('GPX 트랙포인트를 찾지 못했습니다.');return;}
+      const metrics=computeMetrics(pts);
+      els.totalDistance.textContent=fmtDistance(metrics.totalDist);
+      els.elevGain.textContent=fmtElev(metrics.gain);
+      els.elapsedTime.textContent=fmtTime(metrics.elapsed);
+      //els.movingTime.textContent=fmtTime(metrics.movingTime);
+      if(metrics.start&&metrics.end){
+        const fmt=d=>d.toLocaleString(undefined,{hour12:false});
+        els.dateRange.textContent=`${fmt(metrics.start)} → ${fmt(metrics.end)}`;
+      }
+      const latlngs=pts.map(p=>[p.lat,p.lon]);
+      if(trackLayer)trackLayer.remove();
+      trackLayer=L.polyline(latlngs,{color:'#f43f5e',weight:4,opacity:0.9}).addTo(map);
+      map.fitBounds(trackLayer.getBounds(),{padding:[20,20]});
+	  els.pts = pts;
+
+	  exportSummary(els.pts,
+		els.totalDistance.textContent,
+		els.elevGain.textContent,
+		els.elapsedTime.textContent
+	  );
+
+      
+    });
+
+	els.exportBtn.addEventListener('click', function(){
+        console.log('click' );
+        console.log(els);
+      exportSummary(els.pts,
+		els.totalDistance.textContent,
+		els.elevGain.textContent,
+		els.elapsedTime.textContent
+	  );
+    });
+	
+	
+function exportSummary(pts, dd, aa, tt) {
+  const canvas = document.getElementById("summaryCanvas");
+  
+  let font = " 'Montserrat', sans-serif";
+
+  // 레티나 대응 (안티앨리어싱 강화)
+  const scale = 2; // 2배 크기로 그렸다가 축소
+  canvas.width = 600 * scale;
+  canvas.height = 800 * scale;
+  canvas.style.width = "600px";
+  canvas.style.height = "800px";
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  // 캔버스 초기화 (투명 배경)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+
+  // ====== 예시 데이터 (실제 계산 값으로 교체) ======
+  const totalDistance = dd;
+  const totalAscent = aa;
+  const totalTime = tt;
+
+  // ====== 텍스트 출력 (세로 배치) ======
+  const centerX = 300; // 600/2
+  let y = 60;
+
+  // Distance
+  ctx.font = "20px" + font;
+  ctx.fillText("Distance", centerX, y);
+  y += 28;
+  ctx.font = "bold 42px" + font;
+  ctx.fillText(totalDistance, centerX, y);
+  y += 80;
+
+  // Elev Gain
+  ctx.font = "20px" + font;
+  ctx.fillText("Elev Gain", centerX, y);
+  y += 28;
+  ctx.font = "bold 42px" + font;
+  ctx.fillText(totalAscent, centerX, y);
+  y += 80;
+
+  // Time
+  ctx.font = "20px" + font;
+  ctx.fillText("Time", centerX, y);
+  y += 28;
+  ctx.font = "bold 42px" + font;
+  ctx.fillText(totalTime, centerX, y);
+  y += 80;
+
+  // ====== GPX 좌표 경로 그리기 ======
+  const coords = pts; // {lat, lon} 배열
+  if (coords.length > 1) {
+    const lats = coords.map(p => p.lat);
+    const lons = coords.map(p => p.lon);
+	const elevations = coords.map(p => p.ele);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+	const minEle = Math.min(...elevations);
+	const maxEle = Math.max(...elevations);
+
+    // 원래 비율 유지
+    const routeWidth = maxLon - minLon;
+    const routeHeight = maxLat - minLat;
+    const aspect = routeWidth / routeHeight;
+
+    // 박스 크기 (작게)
+    const maxBoxWidth = canvas.width/scale * 0.3;
+    const maxBoxHeight = 180;
+
+    let boxWidth, boxHeight;
+    if (aspect > 1) {
+      boxWidth = maxBoxWidth;
+      boxHeight = maxBoxWidth / aspect;
+    } else {
+      boxHeight = maxBoxHeight;
+      boxWidth = maxBoxHeight * aspect;
+    }
+
+	const gapAfterText = 0; // 텍스트 끝과 경로 사이 간격
+    const offsetX = (canvas.width/scale - boxWidth) / 2;
+    const offsetY = y + gapAfterText; // y 위치
+
+    ctx.beginPath();
+    coords.forEach((p, i) => {
+      const x = offsetX + ((p.lon - minLon) / routeWidth) * boxWidth;
+      const y = offsetY + ((maxLat - p.lat) / routeHeight) * boxHeight;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#FF4500"; // 주황색
+    ctx.lineWidth = 4;
+    ctx.stroke();
+	
+	// 그래프
+	const graphWidth = boxWidth;  // 경로와 같은 너비
+	const graphHeight = 100;      // 그래프 높이
+	const graphOffsetX = offsetX;
+	const graphOffsetY = offsetY + boxHeight + 40; // 경로 아래 20px
+	
+	ctx.beginPath();
+	elevations.forEach((ele, i) => {
+	  const x = graphOffsetX + (i / (elevations.length - 1)) * graphWidth;
+	  const y = graphOffsetY + graphHeight * (1 - (ele - minEle) / (maxEle - minEle));
+	  if(i === 0) ctx.moveTo(x, y);
+	  else ctx.lineTo(x, y);
+	});
+	ctx.strokeStyle = "#FF4500"; // 주황색
+	ctx.lineWidth = 3;
+	ctx.stroke();
+	
+	const maxEleY = graphOffsetY + graphHeight * (1 - (maxEle - minEle) / (maxEle - minEle));
+	const minEleY = graphOffsetY + graphHeight * (1 - (minEle - minEle) / (maxEle - minEle));
+	
+    ctx.beginPath();
+	ctx.moveTo(graphOffsetX, maxEleY);
+	ctx.lineTo(graphOffsetX + graphWidth, maxEleY);
+	ctx.strokeStyle = "white";
+	ctx.lineWidth = 1;
+	ctx.stroke();
+
+    ctx.beginPath();
+	ctx.moveTo(graphOffsetX, minEleY);
+	ctx.lineTo(graphOffsetX + graphWidth, minEleY);
+	ctx.strokeStyle = "white";
+	ctx.lineWidth = 1;
+	ctx.stroke();
+	
+	ctx.fillStyle = "white";
+	ctx.font = "14px " + font;
+	ctx.textAlign = "right";
+	ctx.textBaseline = "bottom";
+	ctx.fillText(`${parseInt(maxEle)} m`, graphOffsetX + graphWidth, maxEleY - 2); // 선 위쪽에 조금 띄워서 표시
+	
+    ctx.textAlign = "left";
+	ctx.textBaseline = "top";
+    ctx.fillText(`${parseInt(minEle)} m`, graphOffsetX + 0, minEleY - 2); // 선 위쪽에 조금 띄워서 표시
+	
+
+	// ====== ID 표시 ======
+	const gapAfterRoute = 30; // 경로 끝과 ID 사이 간격
+	const idY = graphOffsetY + graphHeight + gapAfterRoute;
+
+	ctx.fillStyle = "white";
+	ctx.font = "20px" + font;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "top";
+
+    const txtel = document.getElementById('bottomtext');
+	ctx.fillText(txtel.value, centerX, idY);
+  }
+
+/*
+  // ====== PNG 다운로드 ======
+  const link = document.createElement("a");
+  link.download = "summary.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+  */
+}
+  </script>
+</body>
+</html>
