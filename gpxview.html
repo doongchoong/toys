@@ -81,6 +81,7 @@
       </div>
     </section>
 	<canvas id="summaryCanvas" width="600" height="800"></canvas>
+    <img id="canvasImage" style="display:none;" />
     <footer class="mt-6 text-xs text-slate-400">
       OSM 타일은 공개 리소스입니다. 대량 사용 전에는 자체 타일 서버/키 사용을 고려하세요.
     </footer>
@@ -340,6 +341,15 @@ function exportSummary(pts, dd, aa, tt) {
 
     const txtel = document.getElementById('bottomtext');
 	ctx.fillText(txtel.value, centerX, idY);
+
+    // 이미지화
+    const img = document.getElementById("canvasImage");
+    // Canvas → 이미지로 변환
+    img.src = canvas.toDataURL("image/png");
+
+    // 모바일에서 길게 눌러 복사 가능
+    img.style.display = "block";
+
   }
 
 /*
