@@ -80,8 +80,13 @@
         </div>
       </div>
     </section>
-	<canvas id="summaryCanvas" width="600" height="800"></canvas>
-    <img id="canvasImage" style="display:none;" />
+
+    <div class="flex flex-col items-center p-4">
+  <canvas id="summaryCanvas" class="border border-gray-300 mb-2" width="600" height="800"></canvas>
+  <button id="copyBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+    Copy Canvas
+  </button>
+</div>
     <footer class="mt-6 text-xs text-slate-400">
       OSM 타일은 공개 리소스입니다. 대량 사용 전에는 자체 타일 서버/키 사용을 고려하세요.
     </footer>
@@ -182,7 +187,21 @@
 		els.elapsedTime.textContent
 	  );
     });
-	
+
+    
+const canvas = document.getElementById("summaryCanvas");
+const button = document.getElementById("copyBtn");
+
+button.addEventListener("click", async () => {
+  try {
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    alert("Canvas 이미지가 클립보드에 복사되었습니다!");
+  } catch (err) {
+    console.error("복사 실패:", err);
+    alert("복사 실패! 최신 브라우저에서만 지원됩니다.");
+  }
+});
 	
 function exportSummary(pts, dd, aa, tt) {
   const canvas = document.getElementById("summaryCanvas");
