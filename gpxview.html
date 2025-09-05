@@ -83,6 +83,7 @@
 
     <div class="flex flex-col items-center p-4">
   <canvas id="summaryCanvas" class="border border-gray-300 mb-2" width="600" height="800"></canvas>
+  <img id="canvasImage" style="display:none;" />
   <button id="copyBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
     Copy Canvas
   </button>
@@ -362,10 +363,15 @@ function exportSummary(pts, dd, aa, tt) {
 	ctx.fillText(txtel.value, centerX, idY);
 
     // 이미지화
+    const img = document.getElementById("canvasImage");
 
-    canvas.toBlob(blob => {
-        navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    });
+    // Canvas → 이미지로 변환
+    img.src = canvas.toDataURL("image/png");
+
+    // 모바일에서 길게 눌러 복사 가능
+    img.style.display = "block";
+
+
 
   }
 
