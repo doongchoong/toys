@@ -38,7 +38,7 @@
           <input id="bottomtext" type="text" value="@dc-climbing-gall"  />
         </label>
         <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 bg-white shadow-sm cursor-pointer hover:bg-slate-50">
-          <input id="gpxInput" type="file" accept=".gpx" class="hidden" />
+          <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" class="hidden" />
           <span class="text-sm font-medium">GPX 파일 불러오기</span>
         </label>
         <button id="exportBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white shadow hover:bg-slate-800 disabled:opacity-50" >이미지생성</button>
@@ -83,9 +83,8 @@
 
     <div class="flex flex-col items-center p-4">
   <canvas id="summaryCanvas" class="border border-gray-300 mb-2" width="600" height="800"></canvas>
-  <img id="canvasImage" style="display:none;" />
-  <button id="copyBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-    Copy Canvas
+  <button id="saveBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+    투명이미지저장
   </button>
 </div>
     <footer class="mt-6 text-xs text-slate-400">
@@ -191,17 +190,13 @@
 
     
 const canvas = document.getElementById("summaryCanvas");
-const button = document.getElementById("copyBtn");
+const button = document.getElementById("saveBtn");
 
-button.addEventListener("click", async () => {
-  try {
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    alert("Canvas 이미지가 클립보드에 복사되었습니다!");
-  } catch (err) {
-    console.error("복사 실패:", err);
-    alert("복사 실패! 최신 브라우저에서만 지원됩니다.");
-  }
+button.addEventListener("click", () => {
+  const link = document.createElement("a");
+  link.download = "canvas.png"; // 저장될 파일명
+  link.href = canvas.toDataURL("image/png");
+  link.click();
 });
 	
 function exportSummary(pts, dd, aa, tt) {
@@ -359,20 +354,8 @@ function exportSummary(pts, dd, aa, tt) {
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 
-    const txtel = document.getElementById('bottomtext');
+  const txtel = document.getElementById('bottomtext');
 	ctx.fillText(txtel.value, centerX, idY);
-
-    // 이미지화
-    const img = document.getElementById("canvasImage");
-
-    // Canvas → 이미지로 변환
-    img.src = canvas.toDataURL("image/png");
-
-    // 모바일에서 길게 눌러 복사 가능
-    img.style.display = "block";
-
-
-
   }
 
 /*
