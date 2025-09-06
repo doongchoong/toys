@@ -148,7 +148,7 @@
       return smoothed;
     }
     function computeMetrics(points){
-      const elevThreshold=0, stopSpeed=1, stopGrace=5;
+      const elevThreshold=0.2, stopSpeed=1, stopGrace=5;
       let totalDist=0,gain=0,movingTime=0,last=null,belowSince=null;
       for(const p of points){
         if(!last){last=p;continue;}
