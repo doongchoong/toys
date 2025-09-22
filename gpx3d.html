@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D 북한산 GPX등산코스</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #buttons {
+      position: absolute; top: 10px; left: 10px;
+      z-index: 100;
+    }
+    #buttons button { margin-right: 5px; padding: 5px 10px; }
+  </style>
+</head>
+<body>
+<div id="buttons">
+  <button onclick="switchGPX('bukhansan.gpx')">북한산주능선 역방향</button>
+  <button onclick="switchGPX('bukhansan1.gpx')">북한산성탐센 백운대</button>
+  <button onclick="switchGPX('bukhansan2.gpx')">비봉능선 대성문</button>
+  <button onclick="switchGPX('bukhansan3.gpx')">사패산 도봉산</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+
+<script>
+let scene, camera, renderer, controls;
+let terrainMesh, rasterData, terrainWidth = 1000, terrainHeight = 1000;
+let demWidth, demHeight, geoBounds;
+let pathPoints = [],  line = null;
+let movingSphere;
+const speed = 0.10; // 점 이동 속도
+let pathIndex = 0;
+
+init();
+loadDEM("output_SRTMGL1.tif");   // 본인 DEM 파일
+loadGPXPath("bukhansan.gpx");    // 본인 GPX 파일
+
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xbfd1e5);
+
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 10000);
+  camera.position.set(0, 800, 800);
+  camera.lookAt(0,100,0);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.maxPolarAngle = Math.PI/2;
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+  dirLight.position.set(1, 1, 2);
+  scene.add(dirLight);
+
+  const ambient = new THREE.AmbientLight(0x888888);
+  scene.add(ambient);
+
+  // 이동 점 생성
+  movingSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(2, 16, 16),
+    new THREE.MeshBasicMaterial({color: 0x0000ff})
+  );
+  scene.add(movingSphere);
+
+  window.addEventListener("resize", onWindowResize, false);
+  animate();
+}
+
+async function loadDEM(url) {
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+  const tiff = await GeoTIFF.fromArrayBuffer(arrayBuffer);
+
+  const image = await tiff.getImage();
+  rasterData = await image.readRasters({ interleave: true });
+  demWidth = image.getWidth();
+  demHeight = image.getHeight();
+  geoBounds = image.getBoundingBox(); // [minX, minY, maxX, maxY]
+
+  const geometry = new THREE.PlaneGeometry(terrainWidth, terrainHeight, demWidth-1, demHeight-1);
+  const vertices = geometry.attributes.position.array;
+  for(let i=0,j=2;i<rasterData.length;i++,j+=3){
+    vertices[j] = rasterData[i]/10; // DEM 스케일
+  }
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color:0x88cc88,
+    wireframe:false,
+    side:THREE.DoubleSide,
+    flatShading:true
+  });
+
+  terrainMesh = new THREE.Mesh(geometry, material);
+  terrainMesh.rotation.x = -Math.PI/2;
+  scene.add(terrainMesh);
+}
+
+async function loadGPXPath(url){
+  const res = await fetch(url);
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, "application/xml");
+  const trkpts = xml.querySelectorAll("trkpt");
+  const points = [];
+
+  trkpts.forEach(pt=>{
+    points.push({
+      lat: parseFloat(pt.getAttribute("lat")),
+      lon: parseFloat(pt.getAttribute("lon"))
+    });
+  });
+
+  if(rasterData){
+    createGPXLine(points);
+  } else {
+    const checkDEM = setInterval(()=>{
+      if(rasterData){
+        clearInterval(checkDEM);
+        createGPXLine(points);
+      }
+    },100);
+  }
+}
+
+// 좌표 변환
+function latLonToXZ(lat, lon){
+  const [minX, minY, maxX, maxY] = geoBounds;
+  const x = ((lon - minX)/(maxX - minX) - 0.5) * terrainWidth;
+  const z = (1 - (lat - minY)/(maxY - minY) - 0.5) * terrainHeight;
+  return {x, z};
+}
+
+// GPX 라인 생성 + pathPoints
+function createGPXLine(points){
+
+// 이전 line 제거
+  if(line) scene.remove(line);
+  pathPoints = [];
+  pathIndex = 0;
+  
+  const geometry = new THREE.BufferGeometry();
+  const vertices = [];
+
+  points.forEach(p=>{
+    const pos = latLonToXZ(p.lat, p.lon);
+    const [minX, minY, maxX, maxY] = geoBounds;
+    let ix = Math.floor((p.lon - minX)/(maxX - minX) * (demWidth - 1));
+    let iz = Math.floor((maxY - p.lat)/(maxY - minY) * (demHeight - 1));
+
+    // 범위 clamp
+    ix = Math.max(0, Math.min(ix, demWidth-1));
+    iz = Math.max(0, Math.min(iz, demHeight-1));
+    const idx = iz * demWidth + ix;
+
+    let y = rasterData[idx]/10 + 1;
+    if(isNaN(y)) y = 0;
+
+    vertices.push(pos.x, y, pos.z);
+    pathPoints.push(new THREE.Vector3(pos.x, y+4, pos.z)); // 점 이동용
+  });
+
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices,3));
+  const material = new THREE.LineBasicMaterial({color:0xff0000, linewidth:50});
+  line = new THREE.Line(geometry, material);
+  scene.add(line);
+}
+
+// 버튼 클릭 시 GPX 변경
+function switchGPX(file){
+  pathPoints = [];
+  pathIndex = 0;
+  if(line) scene.remove(line);
+  loadGPXPath(file);
+}
+
+function onWindowResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  // 점 이동 + 카메라 바라보기
+  if(pathPoints.length > 1){
+    const targetPos = pathPoints[pathIndex];
+    movingSphere.position.lerp(targetPos, speed);
+    camera.lookAt(movingSphere.position);
+
+    if(movingSphere.position.distanceTo(targetPos) < 0.5 && pathIndex < pathPoints.length-1){
+      pathIndex++;
+    }
+  }
+
+  controls.update();
+  renderer.render(scene,camera);
+}
+</script>
+</body>
+</html>
